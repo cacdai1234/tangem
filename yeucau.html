@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Yêu cầu quyền truy cập</title>
+  <style>
+    body {
+      background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      color: white;
+      flex-direction: column;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #facc15;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    #adminPanel {
+      position: fixed;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .ipEntry {
+      margin: 10px 0;
+      background: rgba(255,255,255,0.1);
+      padding: 10px;
+      border-radius: 6px;
+    }
+    .ipEntry button {
+      margin-left: 10px;
+      background: #4ade80;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔒 YÊU CẦU QUYỀN TRUY CẬP</h1>
+  <button id="requestAccess">Gửi yêu cầu</button>
+
+  <div id="adminPanel"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCtJtabQIwEl_lUO8vIpeQgp4OyMtcXjkw",
+      authDomain: "login-a2878.firebaseapp.com",
+      databaseURL: "https://login-a2878-default-rtdb.firebaseio.com",
+      projectId: "login-a2878",
+      storageBucket: "login-a2878.appspot.com",
+      messagingSenderId: "312148809641",
+      appId: "1:312148809641:web:c77b295ada290ecc9156b8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Gửi yêu cầu truy cập
+    document.getElementById("requestAccess").onclick = async () => {
+      const ip = await fetch("https://api.ipify.org?format=json").then(res => res.json()).then(data => data.ip);
+      await db.ref("accessRequests/" + ip.replace(/\./g, "_")).set({
+        approved: false,
+        timestamp: Date.now()
+      });
+      alert("Đã gửi yêu cầu, vui lòng chờ admin phê duyệt.");
+    };
+
+    // Kiểm tra IP có được duyệt không
+    setInterval(async () => {
+      const ip = await fetch("https://api.ipify.org?format=json").then(res => res.json()).then(data => data.ip);
+      db.ref("accessRequests/" + ip.replace(/\./g, "_") + "/approved").on("value", snapshot => {
+        if (snapshot.exists() && snapshot.val() === true) {
+          db.ref("accessRequests/" + ip.replace(/\./g, "_")).remove(); // xóa record
+          window.location.href = "index.html";
+        }
+      });
+    }, 3000);
+
+    // Admin nhấn phím P để mở panel
+    document.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "p") {
+        const panel = document.getElementById("adminPanel");
+        panel.style.display = panel.style.display === "block" ? "none" : "block";
+        loadAdminPanel();
+      }
+    });
+
+    function loadAdminPanel() {
+      const panel = document.getElementById("adminPanel");
+      panel.innerHTML = "<h2>Phê duyệt IP</h2>";
+      db.ref("accessRequests").once("value", snapshot => {
+        snapshot.forEach(child => {
+          const ip = child.key.replace(/_/g, ".");
+          const approved = child.val().approved;
+          if (!approved) {
+            const entry = document.createElement("div");
+            entry.className = "ipEntry";
+            entry.innerHTML = `
+              <strong>${ip}</strong>
+              <button onclick="approveIP('${child.key}')">Phê duyệt</button>
+              <button onclick="denyIP('${child.key}')">Từ chối</button>
+            `;
+            panel.appendChild(entry);
+          }
+        });
+      });
+    }
+
+    function approveIP(key) {
+      db.ref("accessRequests/" + key).update({ approved: true });
+    }
+
+    function denyIP(key) {
+      db.ref("accessRequests/" + key).remove();
+    }
+  </script>
+</body>
+</html>
